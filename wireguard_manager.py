@@ -26,9 +26,10 @@ class WireGuardManager:
     def generate_keypair():
         """Generate a WireGuard key pair"""
         try:
-            private_key = subprocess.check_output(['wg', 'genkey']).decode().strip()
+            wg_cmd = '/usr/bin/wg'
+            private_key = subprocess.check_output([wg_cmd, 'genkey']).decode().strip()
             public_key = subprocess.check_output(
-                ['wg', 'pubkey'],
+                [wg_cmd, 'pubkey'],
                 input=private_key.encode()
             ).decode().strip()
             return private_key, public_key
@@ -39,7 +40,8 @@ class WireGuardManager:
     def generate_preshared_key():
         """Generate a preshared key for additional security"""
         try:
-            psk = subprocess.check_output(['wg', 'genpsk']).decode().strip()
+            wg_cmd = '/usr/bin/wg'
+            psk = subprocess.check_output([wg_cmd, 'genpsk']).decode().strip()
             return psk
         except Exception as e:
             raise Exception(f"Failed to generate preshared key: {e}")

@@ -32,9 +32,10 @@ def init_database():
         if not wg_config:
             # Generate server keys
             try:
-                private_key = subprocess.check_output(['wg', 'genkey']).decode().strip()
+                wg_cmd = '/usr/bin/wg'
+                private_key = subprocess.check_output([wg_cmd, 'genkey']).decode().strip()
                 public_key = subprocess.check_output(
-                    ['wg', 'pubkey'], 
+                    [wg_cmd, 'pubkey'], 
                     input=private_key.encode()
                 ).decode().strip()
                 

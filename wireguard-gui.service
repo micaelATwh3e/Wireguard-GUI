@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/wireguard-gui
-Environment="PATH=/opt/wireguard-gui/venv/bin"
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/wireguard-gui/venv/bin"
 ExecStart=/opt/wireguard-gui/venv/bin/python /opt/wireguard-gui/app.py
 Restart=always
 RestartSec=10
