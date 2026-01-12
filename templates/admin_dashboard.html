@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - WireGuard Manager{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="header">
+        <h1>🔧 Admin Dashboard</h1>
+        <div class="nav">
+            <span style="color: #777; margin-right: 10px;">Welcome, {{ current_user.username }}</span>
+            <a href="{{ url_for('add_user') }}" class="btn btn-success">+ Add User</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+        </div>
+    </div>
+    
+    {% if wg_config %}
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-bottom: 10px; color: #333;">Server Information</h3>
+        <p style="color: #666; font-size: 14px; margin: 5px 0;">
+            <strong>Public Key:</strong> <code style="background: white; padding: 2px 6px; border-radius: 3px;">{{ wg_config.server_public_key }}</code>
+        </p>
+        <p style="color: #666; font-size: 14px; margin: 5px 0;">
+            <strong>Endpoint:</strong> {{ config.WG_SERVER_PUBLIC_IP }}:{{ config.WG_SERVER_PORT }}
+        </p>
+        <p style="color: #666; font-size: 14px; margin: 5px 0;">
+            <strong>Network:</strong> {{ config.WG_SUBNET }}
+        </p>
+    </div>
+    {% endif %}
+    
+    <h2 style="margin-bottom: 15px; color: #333;">Users ({{ users|length }})</h2>
+    
+    {% if users %}
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>IP Address</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr id="user-{{ user.id }}">
+                <td><strong>{{ user.username }}</strong></td>
+                <td>{{ user.email or '-' }}</td>
+                <td><code>{{ user.wg_ip_address or 'Not assigned' }}</code></td>
+                <td>
+                    {% if user.is_active %}
+                        <span class="badge badge-success">Active</span>
+                    {% else %}
+                        <span class="badge badge-danger">Disabled</span>
+                    {% endif %}
+                </td>
+                <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    <button onclick="toggleUser({{ user.id }})" class="btn btn-secondary" style="padding: 5px 10px; margin-right: 5px;">
+                        {% if user.is_active %}Disable{% else %}Enable{% endif %}
+                    </button>
+                    <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn" style="padding: 5px 10px; margin-right: 5px;">Edit</a>
+                    <button onclick="regenerateConfig({{ user.id }})" class="btn btn-success" style="padding: 5px 10px; margin-right: 5px;">
+                        Regenerate
+                    </button>
+                    <button onclick="deleteUser({{ user.id }}, '{{ user.username }}')" class="btn btn-danger" style="padding: 5px 10px;">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #999;">
+        <p style="font-size: 18px;">No users yet</p>
+        <p style="margin-top: 10px;">
+            <a href="{{ url_for('add_user') }}" class="btn btn-success">Add your first user</a>
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleUser(userId) {
+    if (!confirm('Are you sure you want to toggle this user\'s status?')) {
+        return;
+    }
+    
+    fetch(`/admin/toggle-user/${userId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function deleteUser(userId, username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/admin/delete-user/${userId}`;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function regenerateConfig(userId) {
+    if (!confirm('Are you sure you want to regenerate this user\'s configuration? Their old config will no longer work.')) {
+        return;
+    }
+    
+    fetch(`/admin/regenerate-config/${userId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+</script>
+{% endblock %}

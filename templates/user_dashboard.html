@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}My Dashboard - WireGuard Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .config-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+    }
+    
+    .download-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 15px 25px;
+        font-size: 16px;
+        margin: 10px 10px 10px 0;
+    }
+    
+    .qr-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .qr-modal.active {
+        display: flex;
+    }
+    
+    .qr-content {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        max-width: 400px;
+        text-align: center;
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+    }
+    
+    .info-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+    
+    .info-card h4 {
+        color: #667eea;
+        margin-bottom: 8px;
+        font-size: 14px;
+        text-transform: uppercase;
+    }
+    
+    .info-card p {
+        color: #333;
+        font-size: 16px;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="header">
+        <h1>👤 My Dashboard</h1>
+        <div class="nav">
+            <span style="color: #777; margin-right: 10px;">Welcome, {{ user.username }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+        </div>
+    </div>
+    
+    {% if user.is_active %}
+        <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #28a745;">
+            <p style="color: #155724; margin: 0;">
+                ✅ Your account is <strong>active</strong>. You can download your WireGuard configuration below.
+            </p>
+        </div>
+    {% else %}
+        <div style="background: #f8d7da; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc3545;">
+            <p style="color: #721c24; margin: 0;">
+                ⚠️ Your account is currently <strong>disabled</strong>. Please contact your administrator.
+            </p>
+        </div>
+    {% endif %}
+    
+    <div class="info-grid">
+        <div class="info-card">
+            <h4>Username</h4>
+            <p>{{ user.username }}</p>
+        </div>
+        
+        <div class="info-card">
+            <h4>VPN IP Address</h4>
+            <p>{{ user.wg_ip_address or 'Not assigned' }}</p>
+        </div>
+        
+        <div class="info-card">
+            <h4>Account Status</h4>
+            <p>
+                {% if user.is_active %}
+                    <span style="color: #28a745;">● Active</span>
+                {% else %}
+                    <span style="color: #dc3545;">● Disabled</span>
+                {% endif %}
+            </p>
+        </div>
+        
+        <div class="info-card">
+            <h4>Member Since</h4>
+            <p>{{ user.created_at.strftime('%B %d, %Y') }}</p>
+        </div>
+    </div>
+    
+    {% if user.is_active %}
+    <div class="config-section">
+        <h2 style="margin-bottom: 15px; color: #333;">📥 Download Configuration</h2>
+        <p style="color: #666; margin-bottom: 20px;">
+            Download your WireGuard configuration file and import it into your WireGuard client. 
+            You can use the desktop app or mobile app.
+        </p>
+        
+        <div>
+            <a href="{{ url_for('download_config') }}" class="btn btn-success download-btn">
+                📄 Download Config File (.conf)
+            </a>
+            
+            <button onclick="showQRCode()" class="btn download-btn">
+                📱 Show QR Code (Mobile)
+            </button>
+        </div>
+    </div>
+    
+    <div class="config-section">
+        <h2 style="margin-bottom: 15px; color: #333;">📖 Setup Instructions</h2>
+        
+        <div style="margin-top: 20px;">
+            <h3 style="color: #667eea; margin-bottom: 10px;">Desktop (Windows/Mac/Linux)</h3>
+            <ol style="color: #666; line-height: 1.8; margin-left: 20px;">
+                <li>Download and install <a href="https://www.wireguard.com/install/" target="_blank" style="color: #667eea;">WireGuard</a></li>
+                <li>Click "Download Config File" above and save it</li>
+                <li>Open WireGuard application</li>
+                <li>Click "Import tunnel(s) from file" and select your downloaded .conf file</li>
+                <li>Click "Activate" to connect</li>
+            </ol>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <h3 style="color: #667eea; margin-bottom: 10px;">Mobile (Android/iOS)</h3>
+            <ol style="color: #666; line-height: 1.8; margin-left: 20px;">
+                <li>Install WireGuard app from <a href="https://play.google.com/store/apps/details?id=com.wireguard.android" target="_blank" style="color: #667eea;">Google Play</a> or <a href="https://apps.apple.com/us/app/wireguard/id1441195209" target="_blank" style="color: #667eea;">App Store</a></li>
+                <li>Open the app and tap the "+" button</li>
+                <li>Select "Scan from QR code"</li>
+                <li>Click "Show QR Code" button above and scan it</li>
+                <li>Toggle the switch to connect</li>
+            </ol>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- QR Code Modal -->
+<div id="qrModal" class="qr-modal" onclick="closeQRCode(event)">
+    <div class="qr-content" onclick="event.stopPropagation()">
+        <h2 style="margin-bottom: 20px; color: #333;">Scan with WireGuard App</h2>
+        <div id="qrCodeImage" style="margin: 20px 0;">
+            <p style="color: #999;">Loading...</p>
+        </div>
+        <button onclick="closeQRCode()" class="btn">Close</button>
+    </div>
+</div>
+
+<script>
+function showQRCode() {
+    const modal = document.getElementById('qrModal');
+    const qrImage = document.getElementById('qrCodeImage');
+    
+    modal.classList.add('active');
+    qrImage.innerHTML = '<p style="color: #999;">Generating QR code...</p>';
+    
+    fetch('{{ url_for("qr_code") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.qr_code) {
+                qrImage.innerHTML = `<img src="${data.qr_code}" alt="QR Code" style="max-width: 100%; height: auto;">`;
+            } else {
+                qrImage.innerHTML = '<p style="color: #dc3545;">Error generating QR code</p>';
+            }
+        })
+        .catch(error => {
+            qrImage.innerHTML = '<p style="color: #dc3545;">Error: ' + error + '</p>';
+        });
+}
+
+function closeQRCode(event) {
+    if (!event || event.target.id === 'qrModal') {
+        document.getElementById('qrModal').classList.remove('active');
+    }
+}
+</script>
+{% endblock %}

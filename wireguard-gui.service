@@ -1,0 +1,15 @@
+[Unit]
+Description=WireGuard Web GUI
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/wireguard-gui
+Environment="PATH=/opt/wireguard-gui/venv/bin"
+ExecStart=/opt/wireguard-gui/venv/bin/python /opt/wireguard-gui/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
