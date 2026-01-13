@@ -1,4 +1,4 @@
-# WireGuard Web GUI
+# WireGuard Web GUI [![Hits](https://hits.sh/github.com/micaelATwh3e/Wireguard-GUI.svg)](https://hits.sh/github.com/micaelATwh3e/Wireguard-GUI/)
 
 A web-based management interface for WireGuard VPN with user authentication and self-service configuration download.
 
