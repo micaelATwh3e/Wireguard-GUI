@@ -189,3 +189,71 @@ AllowedIPs = {user.wg_ip_address}/32
             return True
         except Exception as e:
             raise Exception(f"Failed to apply server config: {e}")
+    
+    @staticmethod
+    def get_peer_statistics():
+        """Get statistics for all connected peers"""
+        try:
+            # Run 'wg show' command to get peer statistics
+            result = subprocess.check_output(
+                ['wg', 'show', Config.WG_INTERFACE, 'dump'],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            
+            if not result:
+                return []
+            
+            peers = []
+            lines = result.split('\n')
+            
+            # Skip header line (first line is interface info)
+            for line in lines[1:]:
+                parts = line.split('\t')
+                if len(parts) >= 6:
+                    public_key = parts[0]
+                    preshared_key = parts[1]
+                    endpoint = parts[2] if parts[2] != '(none)' else None
+                    allowed_ips = parts[3]
+                    latest_handshake = int(parts[4]) if parts[4] != '0' else None
+                    rx_bytes = int(parts[5])
+                    tx_bytes = int(parts[6]) if len(parts) > 6 else 0
+                    
+                    # Find corresponding user
+                    user = User.query.filter_by(wg_public_key=public_key).first()
+                    
+                    if user:
+                        # Convert bytes to human readable format
+                        def format_bytes(bytes_val):
+                            for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                                if bytes_val < 1024.0:
+                                    return f"{bytes_val:.2f} {unit}"
+                                bytes_val /= 1024.0
+                            return f"{bytes_val:.2f} PB"
+                        
+                        # Check if peer is currently connected (handshake within last 3 minutes)
+                        import time
+                        is_online = latest_handshake is not None and (time.time() - latest_handshake) < 180
+                        
+                        peers.append({
+                            'username': user.username,
+                            'email': user.email,
+                            'ip_address': user.wg_ip_address,
+                            'public_key': public_key[:16] + '...',  # Truncate for display
+                            'endpoint': endpoint,
+                            'is_online': is_online,
+                            'latest_handshake': latest_handshake,
+                            'rx_bytes': rx_bytes,
+                            'tx_bytes': tx_bytes,
+                            'rx_formatted': format_bytes(rx_bytes),
+                            'tx_formatted': format_bytes(tx_bytes),
+                            'total_formatted': format_bytes(rx_bytes + tx_bytes)
+                        })
+            
+            return peers
+            
+        except subprocess.CalledProcessError:
+            # Interface might not be up
+            return []
+        except Exception as e:
+            print(f"Error getting peer statistics: {e}")
+            return []

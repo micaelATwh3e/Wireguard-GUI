@@ -297,5 +297,21 @@ def regenerate_config(user_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/admin/peer-statistics')
+@login_required
+@admin_required
+def peer_statistics():
+    """Get real-time peer statistics and connection status"""
+    try:
+        peers = WireGuardManager.get_peer_statistics()
+        return jsonify({
+            'success': True,
+            'peers': peers,
+            'online_count': sum(1 for p in peers if p['is_online']),
+            'total_count': len(peers)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

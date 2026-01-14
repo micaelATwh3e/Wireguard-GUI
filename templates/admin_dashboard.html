@@ -88,6 +88,19 @@
         padding: 0.375rem 0.75rem;
         font-size: 0.813rem;
     }
+    
+    #connectedDevices {
+        min-height: 100px;
+    }
+    
+    .info-value {
+        font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        background: var(--gray-100);
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.813rem;
+        color: var(--gray-700);
+    }
 </style>
 {% endblock %}
 
@@ -137,6 +150,10 @@
             <h3>Disabled</h3>
             <p>{{ users|rejectattr('is_active')|list|length }}</p>
         </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #10B981, #059669);">
+            <h3>Online Now</h3>
+            <p id="onlineCount">—</p>
+        </div>
     </div>
     
     {% if wg_config %}
@@ -160,6 +177,30 @@
     {% endif %}
     
     <div class="section-header">
+        <h2 class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.5rem;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            Connected Devices & Traffic
+        </h2>
+        <button onclick="refreshPeerStats()" class="btn" style="padding: 0.5rem 1rem;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Refresh
+        </button>
+    </div>
+    
+    <div id="connectedDevices">
+        <div style="text-align: center; padding: 2rem; color: var(--gray-400);">
+            <p>Loading connection data...</p>
+        </div>
+    </div>
+    
+    <div class="section-header" style="margin-top: 3rem;">
         <h2 class="section-title">User Management</h2>
     </div>
     
@@ -230,6 +271,104 @@
 </div>
 
 <script>
+function refreshPeerStats() {
+    fetch('/admin/peer-statistics')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updatePeerTable(data.peers);
+                document.getElementById('onlineCount').textContent = data.online_count;
+            } else {
+                showPeerError('Failed to load connection data');
+            }
+        })
+        .catch(error => {
+            showPeerError('Error loading connection data');
+            console.error('Error:', error);
+        });
+}
+
+function updatePeerTable(peers) {
+    const container = document.getElementById('connectedDevices');
+    
+    if (peers.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gray-400);">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                </svg>
+                <p style="font-size: 1rem;">No devices connected</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let tableHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Status</th>
+                    <th>IP Address</th>
+                    <th>Endpoint</th>
+                    <th>Downloaded</th>
+                    <th>Uploaded</th>
+                    <th>Total Traffic</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    peers.forEach(peer => {
+        const statusBadge = peer.is_online 
+            ? '<span class="badge badge-success">● Online</span>'
+            : '<span class="badge badge-danger">○ Offline</span>';
+        
+        const endpoint = peer.endpoint || '—';
+        
+        tableHTML += `
+            <tr>
+                <td><strong>${peer.username}</strong></td>
+                <td>${statusBadge}</td>
+                <td><span class="info-value">${peer.ip_address}</span></td>
+                <td style="font-size: 0.813rem;">${endpoint}</td>
+                <td><strong>${peer.rx_formatted}</strong></td>
+                <td><strong>${peer.tx_formatted}</strong></td>
+                <td><strong style="color: var(--primary);">${peer.total_formatted}</strong></td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = tableHTML;
+}
+
+function showPeerError(message) {
+    const container = document.getElementById('connectedDevices');
+    container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--danger);">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+// Load peer stats on page load
+document.addEventListener('DOMContentLoaded', function() {
+    refreshPeerStats();
+    // Auto-refresh every 10 seconds
+    setInterval(refreshPeerStats, 10000);
+});
+
 function toggleUser(userId) {
     if (!confirm('Toggle user status?')) {
         return;
