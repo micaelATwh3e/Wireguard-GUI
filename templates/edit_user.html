@@ -1,56 +1,92 @@
 {% extends "base.html" %}
 
-{% block title %}Edit User - WireGuard Manager{% endblock %}
+{% block title %}Edit User - SecureNet VPN{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width: 600px; margin: 50px auto;">
+<div class="card" style="max-width: 600px; margin: 3rem auto;">
     <div class="header">
-        <h1>✏️ Edit User: {{ user.username }}</h1>
-        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Back</a>
+        <h1>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            Edit User: {{ user.username }}
+        </h1>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back
+        </a>
     </div>
     
     <form method="POST" action="{{ url_for('edit_user', user_id=user.id) }}">
         <div class="form-group">
             <label for="username">Username</label>
             <input type="text" id="username" value="{{ user.username }}" disabled 
-                   style="background: #f0f0f0; cursor: not-allowed;">
-            <small style="color: #777; font-size: 12px;">Username cannot be changed</small>
+                   style="background: var(--gray-100); cursor: not-allowed; color: var(--gray-500);">
+            <small style="color: var(--gray-500); font-size: 0.813rem; display: block; margin-top: 0.25rem;">
+                Username cannot be modified after creation
+            </small>
         </div>
         
         <div class="form-group">
-            <label for="email">Email</label>
+            <label for="email">Email Address</label>
             <input type="email" id="email" name="email" value="{{ user.email or '' }}" 
                    placeholder="user@example.com">
         </div>
         
         <div class="form-group">
-            <label for="password">New Password (leave empty to keep current)</label>
+            <label for="password">New Password</label>
             <input type="password" id="password" name="password" minlength="6"
-                   placeholder="Enter new password to change">
+                   placeholder="leave empty to keep current password">
+            <small style="color: var(--gray-500); font-size: 0.813rem; display: block; margin-top: 0.25rem;">
+                Only fill this field if you want to change the password
+            </small>
         </div>
         
         <div class="form-group">
-            <label style="display: flex; align-items: center; cursor: pointer;">
+            <label style="display: flex; align-items: center; cursor: pointer; padding: 0.75rem; background: var(--gray-50); border-radius: 8px; border: 1px solid var(--gray-200);">
                 <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}
-                       style="width: auto; margin-right: 10px;">
-                <span>Account Active</span>
+                       style="width: auto; margin-right: 0.75rem; cursor: pointer;">
+                <div>
+                    <span style="font-weight: 500; color: var(--dark);">Enable Account Access</span>
+                    <small style="display: block; color: var(--gray-500); font-size: 0.813rem; margin-top: 0.25rem; font-weight: 400;">
+                        Uncheck to temporarily disable user without deletion
+                    </small>
+                </div>
             </label>
-            <small style="color: #777; font-size: 12px;">Uncheck to disable user access without deleting</small>
         </div>
         
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-            <h3 style="margin-bottom: 10px; color: #333; font-size: 16px;">WireGuard Configuration</h3>
-            <p style="color: #666; font-size: 13px; margin: 5px 0;">
-                <strong>IP Address:</strong> <code style="background: white; padding: 2px 6px; border-radius: 3px;">{{ user.wg_ip_address }}</code>
-            </p>
-            <p style="color: #666; font-size: 13px; margin: 5px 0;">
-                <strong>Public Key:</strong> <code style="background: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; word-break: break-all;">{{ user.wg_public_key }}</code>
-            </p>
+        <div style="background: var(--gray-100); padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+            <h3 style="margin-bottom: 1rem; color: var(--dark); font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
+                    <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"></path>
+                </svg>
+                VPN Configuration
+            </h3>
+            <div style="margin-bottom: 0.75rem;">
+                <div style="color: var(--gray-600); font-size: 0.813rem; margin-bottom: 0.25rem; font-weight: 500;">IP Address</div>
+                <div style="font-family: 'SF Mono', 'Monaco', 'Consolas', monospace; background: white; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.875rem; color: var(--dark); border: 1px solid var(--gray-200);">
+                    {{ user.wg_ip_address }}
+                </div>
+            </div>
+            <div>
+                <div style="color: var(--gray-600); font-size: 0.813rem; margin-bottom: 0.25rem; font-weight: 500;">Public Key</div>
+                <div style="font-family: 'SF Mono', 'Monaco', 'Consolas', monospace; background: white; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.75rem; color: var(--dark); word-break: break-all; border: 1px solid var(--gray-200);">
+                    {{ user.wg_public_key }}
+                </div>
+            </div>
         </div>
         
         <div class="form-group">
-            <button type="submit" class="btn btn-success" style="width: 100%;">
-                Update User
+            <button type="submit" class="btn btn-success" style="width: 100%; padding: 0.875rem; font-size: 1rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Save Changes
             </button>
         </div>
     </form>
