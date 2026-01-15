@@ -1,0 +1,25 @@
+# WireGuard Connection Monitor Service Template
+# 
+# NOTE: This file is a template and will be auto-generated with correct paths
+# during installation by setup_device_management.sh
+#
+# The installer will automatically replace paths with your installation directory.
+# Do not manually copy this file to /etc/systemd/system/
+
+[Unit]
+Description=WireGuard Connection Monitor
+After=network.target wg-quick@wg0.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/path/to/vpn_gui
+Environment="PYTHONPATH=/path/to/vpn_gui"
+ExecStart=/usr/bin/python3 /path/to/vpn_gui/connection_monitor.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

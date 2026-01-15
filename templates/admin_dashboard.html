@@ -212,6 +212,7 @@
                 <th>Email</th>
                 <th>VPN Address</th>
                 <th>Status</th>
+                <th>Max Devices</th>
                 <th>Created</th>
                 <th>Actions</th>
             </tr>
@@ -228,6 +229,10 @@
                     {% else %}
                         <span class="badge badge-danger">Disabled</span>
                     {% endif %}
+                </td>
+                <td>
+                    <span style="font-weight: 600; color: var(--primary);">{{ user.max_connections }}</span>
+                    <span style="font-size: 0.75rem; color: var(--gray-500);">devices</span>
                 </td>
                 <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
                 <td>

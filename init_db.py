@@ -1,4 +1,4 @@
-from models import db, User, WireGuardConfig
+from models import db, User, WireGuardConfig, Device
 from config import Config
 from flask import Flask
 import subprocess
@@ -12,8 +12,10 @@ def init_database():
     db.init_app(app)
     
     with app.app_context():
-        # Create all tables
+        # Create all tables (including Device table)
+        print("Creating database tables...")
         db.create_all()
+        print("✓ All tables created (User, WireGuardConfig, Device)")
         
         # Check if admin exists
         admin = User.query.filter_by(username=Config.ADMIN_USERNAME).first()
@@ -25,7 +27,9 @@ def init_database():
             )
             admin.set_password(Config.ADMIN_PASSWORD)
             db.session.add(admin)
-            print(f"Admin user created: {Config.ADMIN_USERNAME}")
+            print(f"✓ Admin user created: {Config.ADMIN_USERNAME}")
+        else:
+            print(f"✓ Admin user already exists: {Config.ADMIN_USERNAME}")
         
         # Initialize WireGuard config if not exists
         wg_config = WireGuardConfig.query.first()
@@ -45,13 +49,28 @@ def init_database():
                     last_ip_assigned=1
                 )
                 db.session.add(wg_config)
-                print("WireGuard server keys generated")
+                print("✓ WireGuard server keys generated")
+                print(f"  Server public key: {public_key[:32]}...")
             except Exception as e:
-                print(f"Warning: Could not generate WireGuard keys: {e}")
-                print("Make sure WireGuard is installed: sudo apt install wireguard")
+                print(f"⚠️  Warning: Could not generate WireGuard keys: {e}")
+                print("   Make sure WireGuard is installed: sudo apt install wireguard")
+        else:
+            print("✓ WireGuard configuration already exists")
         
         db.session.commit()
-        print("Database initialized successfully!")
+        
+        print("\n" + "="*60)
+        print("DATABASE INITIALIZED SUCCESSFULLY!")
+        print("="*60)
+        print("\n✅ Ready for device management system")
+        print("   - User table: ✓")
+        print("   - Device table: ✓")
+        print("   - WireGuardConfig table: ✓")
+        print("\nYou can now:")
+        print("   • Add users with max_connections limit")
+        print("   • Users can manage multiple devices")
+        print("   • Each device gets unique keys and IP")
+        print("   • Connection limits are enforced")
 
 if __name__ == '__main__':
     init_database()

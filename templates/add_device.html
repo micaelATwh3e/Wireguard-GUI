@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Add Device - WireGuard VPN{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header-section">
+        <h2>Add New Device</h2>
+        <a href="{{ url_for('manage_devices') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Devices
+        </a>
+    </div>
+
+    <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        <div>
+            <strong>Current Status:</strong>
+            You have {{ active_devices }} of {{ user.max_connections }} device slots in use
+        </div>
+    </div>
+
+    {% if not can_add %}
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-circle"></i>
+        <strong>Device Limit Reached!</strong>
+        You have reached your maximum device limit ({{ user.max_connections }}). 
+        Please delete an existing device before adding a new one.
+    </div>
+    <div class="text-center" style="margin-top: 20px;">
+        <a href="{{ url_for('manage_devices') }}" class="btn btn-primary">
+            Go Back to Manage Devices
+        </a>
+    </div>
+    {% else %}
+    <div class="form-card">
+        <form method="POST" action="{{ url_for('add_device') }}">
+            <div class="form-group">
+                <label for="device_name">Device Name *</label>
+                <input type="text" 
+                       id="device_name" 
+                       name="device_name" 
+                       class="form-control" 
+                       placeholder="e.g., iPhone, Laptop, Work Computer"
+                       required
+                       maxlength="100">
+                <small class="form-text">Choose a descriptive name to identify this device</small>
+            </div>
+
+            <div class="device-suggestions">
+                <p><strong>Common device names:</strong></p>
+                <div class="suggestions-grid">
+                    <button type="button" class="suggestion-btn" onclick="setDeviceName('iPhone')">
+                        <i class="fas fa-mobile-alt"></i> iPhone
+                    </button>
+                    <button type="button" class="suggestion-btn" onclick="setDeviceName('Android Phone')">
+                        <i class="fas fa-mobile-alt"></i> Android Phone
+                    </button>
+                    <button type="button" class="suggestion-btn" onclick="setDeviceName('Laptop')">
+                        <i class="fas fa-laptop"></i> Laptop
+                    </button>
+                    <button type="button" class="suggestion-btn" onclick="setDeviceName('Desktop')">
+                        <i class="fas fa-desktop"></i> Desktop
+                    </button>
+                    <button type="button" class="suggestion-btn" onclick="setDeviceName('iPad')">
+                        <i class="fas fa-tablet-alt"></i> iPad
+                    </button>
+                    <button type="button" class="suggestion-btn" onclick="setDeviceName('Work Computer')">
+                        <i class="fas fa-briefcase"></i> Work Computer
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-note">
+                <i class="fas fa-lightbulb"></i>
+                <div>
+                    <strong>What happens next?</strong>
+                    <p>After creating the device, you'll be able to download the configuration file or scan a QR code to connect.</p>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create Device
+                </button>
+                <a href="{{ url_for('manage_devices') }}" class="btn btn-secondary">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .form-card {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 600px;
+        margin: 20px auto;
+    }
+    
+    .form-group {
+        margin-bottom: 25px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    }
+    
+    .form-text {
+        display: block;
+        margin-top: 6px;
+        color: #666;
+        font-size: 0.875rem;
+    }
+    
+    .device-suggestions {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+    }
+    
+    .device-suggestions p {
+        margin: 0 0 12px 0;
+        color: #666;
+        font-size: 0.9rem;
+    }
+    
+    .suggestions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+    }
+    
+    .suggestion-btn {
+        background: white;
+        border: 1px solid var(--border);
+        padding: 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+    }
+    
+    .suggestion-btn:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .suggestion-btn i {
+        font-size: 1.2rem;
+    }
+    
+    .info-note {
+        background: #e7f3ff;
+        border-left: 4px solid var(--primary);
+        padding: 15px;
+        border-radius: 4px;
+        display: flex;
+        gap: 12px;
+        margin-bottom: 25px;
+    }
+    
+    .info-note i {
+        color: var(--primary);
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+    
+    .info-note strong {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--primary);
+    }
+    
+    .info-note p {
+        margin: 0;
+        color: #555;
+        font-size: 0.9rem;
+    }
+    
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+    }
+    
+    .info-box {
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .info-box i {
+        font-size: 2rem;
+        opacity: 0.8;
+    }
+    
+    .info-box strong {
+        display: block;
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 5px;
+    }
+</style>
+
+<script>
+function setDeviceName(name) {
+    document.getElementById('device_name').value = name;
+    document.getElementById('device_name').focus();
+}
+</script>
+{% endblock %}

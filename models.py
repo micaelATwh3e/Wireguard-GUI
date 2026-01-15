@@ -16,12 +16,16 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # WireGuard specific fields
+    # WireGuard specific fields (legacy - kept for backward compatibility)
     wg_public_key = db.Column(db.String(255))
     wg_private_key = db.Column(db.String(255))
     wg_preshared_key = db.Column(db.String(255))
     wg_ip_address = db.Column(db.String(15))  # e.g., 10.8.0.2
     wg_allowed_ips = db.Column(db.String(255), default='0.0.0.0/0')
+    max_connections = db.Column(db.Integer, default=1)  # Maximum simultaneous connections allowed
+    
+    # Relationship to devices
+    devices = db.relationship('Device', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -43,3 +47,25 @@ class WireGuardConfig(db.Model):
     
     def __repr__(self):
         return f'<WireGuardConfig>'
+
+
+class Device(db.Model):
+    __tablename__ = 'devices'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    device_name = db.Column(db.String(100), nullable=False)  # e.g., "iPhone", "Laptop"
+    wg_public_key = db.Column(db.String(255), unique=True, nullable=False)
+    wg_private_key = db.Column(db.String(255), nullable=False)
+    wg_preshared_key = db.Column(db.String(255))
+    wg_ip_address = db.Column(db.String(15), unique=True, nullable=False)  # e.g., 10.8.0.2
+    wg_allowed_ips = db.Column(db.String(255), default='0.0.0.0/0')
+    
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_handshake = db.Column(db.DateTime, nullable=True)  # Last successful connection
+    is_connected = db.Column(db.Boolean, default=False)  # Currently connected
+    
+    def __repr__(self):
+        return f'<Device {self.device_name} - {self.user.username}>'
+

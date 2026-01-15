@@ -1,11 +1,13 @@
 import subprocess
 import ipaddress
 import re
-from models import db, User, WireGuardConfig
+from models import db, User, WireGuardConfig, Device
 from config import Config
 import qrcode
 import io
 import base64
+from datetime import datetime
+import time
 
 class WireGuardManager:
     """Manages WireGuard configuration and user setup"""
@@ -218,10 +220,17 @@ AllowedIPs = {user.wg_ip_address}/32
                     rx_bytes = int(parts[5])
                     tx_bytes = int(parts[6]) if len(parts) > 6 else 0
                     
-                    # Find corresponding user
-                    user = User.query.filter_by(wg_public_key=public_key).first()
+                    # Find corresponding user or device
+                    device = Device.query.filter_by(wg_public_key=public_key).first()
+                    user = None
                     
-                    if user:
+                    if device:
+                        user = device.user
+                    else:
+                        # Fallback to legacy user config
+                        user = User.query.filter_by(wg_public_key=public_key).first()
+                    
+                    if user or device:
                         # Convert bytes to human readable format
                         def format_bytes(bytes_val):
                             for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
@@ -231,13 +240,13 @@ AllowedIPs = {user.wg_ip_address}/32
                             return f"{bytes_val:.2f} PB"
                         
                         # Check if peer is currently connected (handshake within last 3 minutes)
-                        import time
                         is_online = latest_handshake is not None and (time.time() - latest_handshake) < 180
                         
                         peers.append({
-                            'username': user.username,
-                            'email': user.email,
-                            'ip_address': user.wg_ip_address,
+                            'username': user.username if user else 'Unknown',
+                            'device_name': device.device_name if device else 'Legacy Config',
+                            'email': user.email if user else '',
+                            'ip_address': device.wg_ip_address if device else (user.wg_ip_address if user else 'N/A'),
                             'public_key': public_key[:16] + '...',  # Truncate for display
                             'endpoint': endpoint,
                             'is_online': is_online,
@@ -257,3 +266,203 @@ AllowedIPs = {user.wg_ip_address}/32
         except Exception as e:
             print(f"Error getting peer statistics: {e}")
             return []
+    
+    @staticmethod
+    def create_device_config(user, device_name):
+        """Create WireGuard configuration for a specific device"""
+        wg_config = WireGuardConfig.query.first()
+        if not wg_config:
+            raise Exception("WireGuard server not configured")
+        
+        # Check if user has reached max connections
+        active_devices = Device.query.filter_by(user_id=user.id, is_active=True).count()
+        if active_devices >= user.max_connections:
+            raise Exception(f"User has reached maximum device limit ({user.max_connections})")
+        
+        # Check if device name already exists for this user
+        existing = Device.query.filter_by(user_id=user.id, device_name=device_name).first()
+        if existing:
+            raise Exception(f"Device '{device_name}' already exists for this user")
+        
+        # Generate keys for device
+        private_key, public_key = WireGuardManager.generate_keypair()
+        preshared_key = WireGuardManager.generate_preshared_key()
+        ip_address = WireGuardManager.get_next_ip()
+        
+        # Create device record
+        device = Device(
+            user_id=user.id,
+            device_name=device_name,
+            wg_public_key=public_key,
+            wg_private_key=private_key,
+            wg_preshared_key=preshared_key,
+            wg_ip_address=ip_address,
+            wg_allowed_ips='0.0.0.0/0',
+            is_active=True
+        )
+        
+        db.session.add(device)
+        db.session.commit()
+        
+        # Create client config
+        config = f"""[Interface]
+PrivateKey = {device.wg_private_key}
+Address = {device.wg_ip_address}/32
+DNS = {Config.WG_DNS}
+
+[Peer]
+PublicKey = {wg_config.server_public_key}
+PresharedKey = {device.wg_preshared_key}
+Endpoint = {Config.WG_SERVER_PUBLIC_IP}:{Config.WG_SERVER_PORT}
+AllowedIPs = {device.wg_allowed_ips}
+PersistentKeepalive = 25
+"""
+        return device, config
+    
+    @staticmethod
+    def get_device_config(device):
+        """Get WireGuard configuration for an existing device"""
+        wg_config = WireGuardConfig.query.first()
+        if not wg_config:
+            raise Exception("WireGuard server not configured")
+        
+        config = f"""[Interface]
+PrivateKey = {device.wg_private_key}
+Address = {device.wg_ip_address}/32
+DNS = {Config.WG_DNS}
+
+[Peer]
+PublicKey = {wg_config.server_public_key}
+PresharedKey = {device.wg_preshared_key}
+Endpoint = {Config.WG_SERVER_PUBLIC_IP}:{Config.WG_SERVER_PORT}
+AllowedIPs = {device.wg_allowed_ips}
+PersistentKeepalive = 25
+"""
+        return config
+    
+    @staticmethod
+    def update_server_config_with_devices():
+        """Update WireGuard server configuration with all active devices"""
+        wg_config = WireGuardConfig.query.first()
+        if not wg_config:
+            raise Exception("WireGuard server not configured")
+        
+        # Get all active devices
+        devices = Device.query.filter_by(is_active=True).all()
+        
+        # Also get legacy users (those with wg_public_key but no devices)
+        legacy_users = User.query.filter(
+            User.is_active == True,
+            User.is_admin == False,
+            User.wg_public_key.isnot(None),
+            ~User.id.in_([d.user_id for d in devices])
+        ).all()
+        
+        # Get default network interface
+        net_interface = WireGuardManager.get_default_interface()
+        
+        # Build server config
+        config = f"""[Interface]
+Address = {Config.WG_SERVER_IP}/24
+ListenPort = {Config.WG_SERVER_PORT}
+PrivateKey = {wg_config.server_private_key}
+PostUp = iptables -A FORWARD -i {Config.WG_INTERFACE} -j ACCEPT; iptables -t nat -A POSTROUTING -o {net_interface} -j MASQUERADE
+PostDown = iptables -D FORWARD -i {Config.WG_INTERFACE} -j ACCEPT; iptables -t nat -D POSTROUTING -o {net_interface} -j MASQUERADE
+
+"""
+        
+        # Add each device as a peer
+        for device in devices:
+            if device.user.is_active:
+                config += f"""# {device.user.username} - {device.device_name}
+[Peer]
+PublicKey = {device.wg_public_key}
+PresharedKey = {device.wg_preshared_key}
+AllowedIPs = {device.wg_ip_address}/32
+
+"""
+        
+        # Add legacy user configs
+        for user in legacy_users:
+            if user.wg_public_key and user.wg_ip_address:
+                config += f"""# {user.username} (Legacy)
+[Peer]
+PublicKey = {user.wg_public_key}
+PresharedKey = {user.wg_preshared_key}
+AllowedIPs = {user.wg_ip_address}/32
+
+"""
+        
+        return config
+    
+    @staticmethod
+    def apply_server_config_with_devices():
+        """Apply the server configuration to WireGuard with device support"""
+        try:
+            config = WireGuardManager.update_server_config_with_devices()
+            
+            # Write to temp file
+            config_path = f'/etc/wireguard/{Config.WG_INTERFACE}.conf'
+            with open(config_path, 'w') as f:
+                f.write(config)
+            
+            # Restart WireGuard interface
+            subprocess.run(['wg-quick', 'down', Config.WG_INTERFACE], 
+                         stderr=subprocess.DEVNULL)
+            subprocess.run(['wg-quick', 'up', Config.WG_INTERFACE], check=True)
+            
+            return True
+        except Exception as e:
+            raise Exception(f"Failed to apply server config: {e}")
+    
+    @staticmethod
+    def update_device_connection_status():
+        """Update connection status for all devices based on WireGuard stats"""
+        try:
+            result = subprocess.check_output(
+                ['wg', 'show', Config.WG_INTERFACE, 'dump'],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            
+            if not result:
+                # No peers connected, mark all as disconnected
+                Device.query.update({Device.is_connected: False})
+                db.session.commit()
+                return
+            
+            connected_keys = set()
+            lines = result.split('\n')
+            
+            # Skip header line
+            for line in lines[1:]:
+                parts = line.split('\t')
+                if len(parts) >= 5:
+                    public_key = parts[0]
+                    latest_handshake = int(parts[4]) if parts[4] != '0' else None
+                    
+                    # Check if handshake is recent (within 3 minutes)
+                    if latest_handshake and (time.time() - latest_handshake) < 180:
+                        connected_keys.add(public_key)
+                        
+                        # Update device
+                        device = Device.query.filter_by(wg_public_key=public_key).first()
+                        if device:
+                            device.is_connected = True
+                            device.last_handshake = datetime.fromtimestamp(latest_handshake)
+            
+            # Mark disconnected devices
+            all_devices = Device.query.all()
+            for device in all_devices:
+                if device.wg_public_key not in connected_keys:
+                    device.is_connected = False
+            
+            db.session.commit()
+            
+        except Exception as e:
+            print(f"Error updating device connection status: {e}")
+    
+    @staticmethod
+    def get_user_connected_device_count(user_id):
+        """Get count of currently connected devices for a user"""
+        WireGuardManager.update_device_connection_status()
+        return Device.query.filter_by(user_id=user_id, is_connected=True).count()

@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, User, WireGuardConfig
+from models import db, User, WireGuardConfig, Device
 from wireguard_manager import WireGuardManager
 from config import Config
 import io
@@ -149,6 +149,7 @@ def add_user():
         username = request.form.get('username')
         password = request.form.get('password')
         email = request.form.get('email')
+        max_connections = request.form.get('max_connections', '1')
         
         # Check if user exists
         existing_user = User.query.filter_by(username=username).first()
@@ -157,11 +158,17 @@ def add_user():
             return redirect(url_for('add_user'))
         
         try:
+            # Parse max connections
+            max_conn = int(max_connections)
+            if max_conn < 1 or max_conn > 10:
+                max_conn = 1
+            
             # Create user
             user = User(
                 username=username,
                 email=email,
-                is_admin=False
+                is_admin=False,
+                max_connections=max_conn
             )
             user.set_password(password)
             
@@ -201,6 +208,18 @@ def edit_user(user_id):
             user.set_password(password)
         
         user.is_active = request.form.get('is_active') == 'on'
+        
+        # Update max connections
+        max_connections = request.form.get('max_connections')
+        if max_connections:
+            try:
+                max_conn = int(max_connections)
+                if 1 <= max_conn <= 10:
+                    user.max_connections = max_conn
+                else:
+                    flash('Max connections must be between 1 and 10', 'warning')
+            except ValueError:
+                flash('Invalid max connections value', 'warning')
         
         try:
             db.session.commit()
@@ -312,6 +331,166 @@ def peer_statistics():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ==================== Device Management Routes ====================
+
+@app.route('/devices')
+@login_required
+def manage_devices():
+    """User device management page"""
+    if current_user.is_admin:
+        return redirect(url_for('admin_dashboard'))
+    
+    devices = Device.query.filter_by(user_id=current_user.id).order_by(Device.created_at.desc()).all()
+    
+    # Update connection status
+    WireGuardManager.update_device_connection_status()
+    
+    connected_count = sum(1 for d in devices if d.is_connected)
+    
+    return render_template('manage_devices.html', 
+                         user=current_user, 
+                         devices=devices,
+                         connected_count=connected_count)
+
+@app.route('/devices/add', methods=['GET', 'POST'])
+@login_required
+def add_device():
+    """Add a new device"""
+    if current_user.is_admin:
+        flash('Admin users cannot add devices', 'warning')
+        return redirect(url_for('admin_dashboard'))
+    
+    if request.method == 'POST':
+        device_name = request.form.get('device_name', '').strip()
+        
+        if not device_name:
+            flash('Device name is required', 'danger')
+            return redirect(url_for('add_device'))
+        
+        try:
+            device, config = WireGuardManager.create_device_config(current_user, device_name)
+            
+            # Update server config
+            WireGuardManager.apply_server_config_with_devices()
+            
+            flash(f'Device "{device_name}" added successfully', 'success')
+            return redirect(url_for('manage_devices'))
+        except Exception as e:
+            flash(f'Error adding device: {str(e)}', 'danger')
+    
+    active_devices = Device.query.filter_by(user_id=current_user.id, is_active=True).count()
+    can_add = active_devices < current_user.max_connections
+    
+    return render_template('add_device.html', user=current_user, can_add=can_add, active_devices=active_devices)
+
+@app.route('/devices/<int:device_id>/download')
+@login_required
+def download_device_config(device_id):
+    """Download device configuration"""
+    device = Device.query.get_or_404(device_id)
+    
+    # Check ownership
+    if device.user_id != current_user.id and not current_user.is_admin:
+        flash('Access denied', 'danger')
+        return redirect(url_for('manage_devices'))
+    
+    try:
+        config = WireGuardManager.get_device_config(device)
+        
+        buffer = io.BytesIO()
+        buffer.write(config.encode())
+        buffer.seek(0)
+        
+        filename = f"{device.user.username}_{device.device_name}_wg.conf".replace(' ', '_')
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/plain'
+        )
+    except Exception as e:
+        flash(f'Error downloading config: {str(e)}', 'danger')
+        return redirect(url_for('manage_devices'))
+
+@app.route('/devices/<int:device_id>/qr-code')
+@login_required
+def device_qr_code(device_id):
+    """Get QR code for device"""
+    device = Device.query.get_or_404(device_id)
+    
+    # Check ownership
+    if device.user_id != current_user.id and not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        config = WireGuardManager.get_device_config(device)
+        qr_image = WireGuardManager.generate_qr_code(config)
+        
+        return jsonify({'qr_code': f'data:image/png;base64,{qr_image}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/devices/<int:device_id>/delete', methods=['POST'])
+@login_required
+def delete_device(device_id):
+    """Delete a device"""
+    device = Device.query.get_or_404(device_id)
+    
+    # Check ownership
+    if device.user_id != current_user.id and not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        device_name = device.device_name
+        db.session.delete(device)
+        db.session.commit()
+        
+        # Update server config
+        WireGuardManager.apply_server_config_with_devices()
+        
+        return jsonify({'success': True, 'message': f'Device "{device_name}" deleted'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/devices/<int:device_id>/toggle', methods=['POST'])
+@login_required
+def toggle_device(device_id):
+    """Enable/disable a device"""
+    device = Device.query.get_or_404(device_id)
+    
+    # Check ownership
+    if device.user_id != current_user.id and not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        device.is_active = not device.is_active
+        db.session.commit()
+        
+        # Update server config
+        WireGuardManager.apply_server_config_with_devices()
+        
+        return jsonify({
+            'success': True,
+            'is_active': device.is_active
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/devices')
+@login_required
+@admin_required
+def admin_view_devices():
+    """Admin view of all devices"""
+    devices = Device.query.join(User).order_by(User.username, Device.created_at.desc()).all()
+    
+    # Update connection status
+    WireGuardManager.update_device_connection_status()
+    
+    return render_template('admin_devices.html', devices=devices)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
