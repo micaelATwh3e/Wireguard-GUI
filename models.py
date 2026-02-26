@@ -23,6 +23,7 @@ class User(UserMixin, db.Model):
     wg_ip_address = db.Column(db.String(15))  # e.g., 10.8.0.2
     wg_allowed_ips = db.Column(db.String(255), default='0.0.0.0/0')
     max_connections = db.Column(db.Integer, default=1)  # Maximum simultaneous connections allowed
+    allowed_source_ips = db.Column(db.Text)  # Comma-separated list of IPs/CIDRs that can connect (empty = allow all)
     
     # Relationship to devices
     devices = db.relationship('Device', backref='user', lazy=True, cascade='all, delete-orphan')

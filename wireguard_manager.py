@@ -11,6 +11,22 @@ import time
 
 class WireGuardManager:
     """Manages WireGuard configuration and user setup"""
+
+    @staticmethod
+    def _build_interface_firewall_rules(net_interface):
+        """Build PostUp/PostDown rules for forwarding and NAT"""
+        postup_parts = [
+            'sysctl -w net.ipv4.ip_forward=1',
+            f'iptables -A FORWARD -i {Config.WG_INTERFACE} -j ACCEPT',
+            f'iptables -A FORWARD -o {Config.WG_INTERFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT',
+            f'iptables -t nat -A POSTROUTING -o {net_interface} -j MASQUERADE',
+        ]
+        postdown_parts = [
+            f'iptables -D FORWARD -i {Config.WG_INTERFACE} -j ACCEPT',
+            f'iptables -D FORWARD -o {Config.WG_INTERFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT',
+            f'iptables -t nat -D POSTROUTING -o {net_interface} -j MASQUERADE',
+        ]
+        return '; '.join(postup_parts), '; '.join(postdown_parts)
     
     @staticmethod
     def get_default_interface():
@@ -148,14 +164,15 @@ PersistentKeepalive = 25
         
         # Get default network interface
         net_interface = WireGuardManager.get_default_interface()
+        postup, postdown = WireGuardManager._build_interface_firewall_rules(net_interface)
         
         # Build server config
         config = f"""[Interface]
 Address = {Config.WG_SERVER_IP}/24
 ListenPort = {Config.WG_SERVER_PORT}
 PrivateKey = {wg_config.server_private_key}
-PostUp = iptables -A FORWARD -i {Config.WG_INTERFACE} -j ACCEPT; iptables -t nat -A POSTROUTING -o {net_interface} -j MASQUERADE
-PostDown = iptables -D FORWARD -i {Config.WG_INTERFACE} -j ACCEPT; iptables -t nat -D POSTROUTING -o {net_interface} -j MASQUERADE
+    PostUp = {postup}
+    PostDown = {postdown}
 
 """
         
@@ -360,14 +377,15 @@ PersistentKeepalive = 25
         
         # Get default network interface
         net_interface = WireGuardManager.get_default_interface()
+        postup, postdown = WireGuardManager._build_interface_firewall_rules(net_interface)
         
         # Build server config
         config = f"""[Interface]
 Address = {Config.WG_SERVER_IP}/24
 ListenPort = {Config.WG_SERVER_PORT}
 PrivateKey = {wg_config.server_private_key}
-PostUp = iptables -A FORWARD -i {Config.WG_INTERFACE} -j ACCEPT; iptables -t nat -A POSTROUTING -o {net_interface} -j MASQUERADE
-PostDown = iptables -D FORWARD -i {Config.WG_INTERFACE} -j ACCEPT; iptables -t nat -D POSTROUTING -o {net_interface} -j MASQUERADE
+    PostUp = {postup}
+    PostDown = {postdown}
 
 """
         

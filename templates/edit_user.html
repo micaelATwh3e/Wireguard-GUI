@@ -56,6 +56,17 @@
         </div>
         
         <div class="form-group">
+            <label for="allowed_source_ips">Allowed Source IPs (Optional)</label>
+            <textarea id="allowed_source_ips" name="allowed_source_ips" rows="3" 
+                      placeholder="e.g., 203.0.113.0/24, 198.51.100.50, 2001:db8::/32"
+                      style="font-family: 'SF Mono', 'Monaco', 'Consolas', monospace; font-size: 0.875rem;">{{ user.allowed_source_ips or '' }}</textarea>
+            <small style="color: var(--gray-500); font-size: 0.813rem; display: block; margin-top: 0.25rem;">
+                Comma-separated list of IP addresses or CIDR ranges allowed to connect. Leave empty to allow all IPs. 
+                Supports both IPv4 and IPv6.
+            </small>
+        </div>
+        
+        <div class="form-group">
             <label style="display: flex; align-items: center; cursor: pointer; padding: 0.75rem; background: var(--gray-50); border-radius: 8px; border: 1px solid var(--gray-200);">
                 <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}
                        style="width: auto; margin-right: 0.75rem; cursor: pointer;">

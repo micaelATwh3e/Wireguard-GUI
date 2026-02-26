@@ -4,6 +4,8 @@ from models import db, User, WireGuardConfig, Device
 from wireguard_manager import WireGuardManager
 from config import Config
 import io
+import ipaddress
+import os
 from functools import wraps
 
 app = Flask(__name__)
@@ -18,6 +20,27 @@ login_manager.login_view = 'login'
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+def validate_ip_list(ip_string):
+    """
+    Validate a comma-separated list of IP addresses and CIDR ranges.
+    Returns (is_valid, cleaned_string, error_message)
+    """
+    if not ip_string or not ip_string.strip():
+        return True, None, None
+    
+    ips = [ip.strip() for ip in ip_string.split(',') if ip.strip()]
+    validated_ips = []
+    
+    for ip in ips:
+        try:
+            # Try to parse as IP network (supports both single IPs and CIDR)
+            network = ipaddress.ip_network(ip, strict=False)
+            validated_ips.append(str(network))
+        except ValueError:
+            return False, None, f"Invalid IP address or CIDR: {ip}"
+    
+    return True, ', '.join(validated_ips), None
 
 def admin_required(f):
     """Decorator to require admin access"""
@@ -150,6 +173,13 @@ def add_user():
         password = request.form.get('password')
         email = request.form.get('email')
         max_connections = request.form.get('max_connections', '1')
+        allowed_source_ips = request.form.get('allowed_source_ips', '').strip()
+        
+        # Validate allowed source IPs
+        is_valid, cleaned_ips, error_msg = validate_ip_list(allowed_source_ips)
+        if not is_valid:
+            flash(f'Invalid allowed source IPs: {error_msg}', 'danger')
+            return redirect(url_for('add_user'))
         
         # Check if user exists
         existing_user = User.query.filter_by(username=username).first()
@@ -168,7 +198,8 @@ def add_user():
                 username=username,
                 email=email,
                 is_admin=False,
-                max_connections=max_conn
+                max_connections=max_conn,
+                allowed_source_ips=cleaned_ips
             )
             user.set_password(password)
             
@@ -203,11 +234,19 @@ def edit_user(user_id):
     if request.method == 'POST':
         user.email = request.form.get('email')
         password = request.form.get('password')
+        allowed_source_ips = request.form.get('allowed_source_ips', '').strip()
+        
+        # Validate allowed source IPs
+        is_valid, cleaned_ips, error_msg = validate_ip_list(allowed_source_ips)
+        if not is_valid:
+            flash(f'Invalid allowed source IPs: {error_msg}', 'danger')
+            return render_template('edit_user.html', user=user)
         
         if password:
             user.set_password(password)
         
         user.is_active = request.form.get('is_active') == 'on'
+        user.allowed_source_ips = cleaned_ips
         
         # Update max connections
         max_connections = request.form.get('max_connections')
@@ -492,5 +531,31 @@ def admin_view_devices():
     
     return render_template('admin_devices.html', devices=devices)
 
+
+    def initialize_wireguard_on_startup():
+        """Ensure WireGuard config/routing rules are restored after reboot"""
+        if os.geteuid() != 0:
+            print("WireGuard startup sync skipped: requires root privileges")
+            return
+
+        try:
+            with app.app_context():
+                wg_config = WireGuardConfig.query.first()
+                if not wg_config:
+                    return
+
+                has_devices = Device.query.first() is not None
+                if has_devices:
+                    WireGuardManager.apply_server_config_with_devices()
+                else:
+                    WireGuardManager.apply_server_config()
+
+                print("WireGuard startup sync completed")
+        except Exception as e:
+            print(f"WireGuard startup sync failed: {e}")
+
+
+    initialize_wireguard_on_startup()
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=4188, debug=True)

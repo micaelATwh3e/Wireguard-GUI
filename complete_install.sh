@@ -60,6 +60,7 @@ echo ""
 echo "========================================="
 echo "STEP 3: Initializing Database"
 echo "========================================="
+source venv/bin/activate
 python3 init_db.py
 
 echo ""
@@ -79,6 +80,7 @@ echo ""
 echo "FEATURES ENABLED:"
 echo "  ✅ Multi-device management per user"
 echo "  ✅ Enforced connection limits (max_connections)"
+echo "  ✅ Allowed source IP restrictions"
 echo "  ✅ Real-time connection monitoring"
 echo "  ✅ Unique keys per device"
 echo "  ✅ Per-device enable/disable"

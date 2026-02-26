@@ -1,5 +1,4 @@
-![Visitors](https://stats.wh3e.se/badge/micaelATwh3e/Wireguard-GUI)
-# WireGuard Web GUI
+# WireGuard Web GUI [![Hits](https://hits.sh/github.com/micaelATwh3e/Wireguard-GUI.svg)](https://hits.sh/github.com/micaelATwh3e/Wireguard-GUI/)
 
 A web-based management interface for WireGuard VPN with user authentication and self-service configuration download.
 
@@ -7,9 +6,13 @@ A web-based management interface for WireGuard VPN with user authentication and 
 
 - **Admin Panel**: Add, update, and manage WireGuard users
 - **User Portal**: Users can login and download their configuration files
+- **Multi-Device Support**: Each user can manage multiple devices with separate configs
+- **Connection Limits**: Enforce maximum simultaneous connections per user
+- **IP Access Control**: Restrict VPN access to specific source IP addresses
 - **QR Code Generation**: Mobile-friendly QR codes for easy setup
 - **Automatic IP Assignment**: Automatically assigns IPs from the VPN subnet
 - **User Management**: Enable/disable users without removing them
+- **Real-time Monitoring**: Track connection status and device activity
 
 ## Requirements
 
@@ -19,10 +22,22 @@ A web-based management interface for WireGuard VPN with user authentication and 
 
 ## Installation
 
+### Quick Start (New Installation)
+```bash
+# 1. Run automated installer
+./complete_install.sh
+```
+
+### Manual Installation
+
 1. Clone or copy this project to your server
 
 2. Install dependencies:
 ```bash
+./install.sh
+# OR manually:
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -39,8 +54,20 @@ Update the following in `.env`:
 
 4. Initialize the database:
 ```bash
+source venv/bin/activate
 python init_db.py
 ```
+
+### Updating Existing Installation
+
+If you already have the VPN GUI installed:
+
+```bash
+# Run the update script
+./update_db.sh
+```
+
+See [DATABASE_SETUP.md](DATABASE_SETUP.md) for detailed update instructions.
 
 5. Set up WireGuard server (if not already done):
 ```bash
@@ -62,16 +89,28 @@ The application will be available at `http://localhost:5000`
 - Password: As set in `.env`
 
 From the admin panel you can:
-- Add new users
+- Add new users with connection limits and IP restrictions
+- Set allowed source IPs for enhanced security
+- Configure max simultaneous connections per user
 - View all users and their configurations
 - Enable/disable users
 - Delete users
+- Manage user devices
 
 ### User Access
 - URL: `/login`
 - Users login with their assigned username and password
+- Add and manage multiple devices
 - Download configuration file as `.conf`
 - View QR code for mobile setup
+- See connection status for each device
+
+## Documentation
+
+- [DEVICE_MANAGEMENT.md](DEVICE_MANAGEMENT.md) - Multi-device feature guide
+- [ALLOWED_IPS_FEATURE.md](ALLOWED_IPS_FEATURE.md) - IP access control guide
+- [DATABASE_SETUP.md](DATABASE_SETUP.md) - Database setup and migration guide
+- [QUICK_START.md](QUICK_START.md) - Quick reference guide
 
 ## Security Notes
 
